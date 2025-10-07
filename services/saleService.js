@@ -1,0 +1,141 @@
+import Sale from "../models/Sale.js";
+import Product from "../models/Product.js";
+import Customer from "../models/Customer.js";
+import Lat from "../models/Lat.js";
+
+// services/saleService.js
+export const createSaleService = async (data) => {
+
+  try {
+    // 1. Create the Sale object with proper Date handling
+
+    const saleData = {
+      ...data,
+      Date: data.Date ? new Date(data.Date) : new Date(), // Ensure proper Date object
+      products: data.products.map(product => {
+        const unitPrice = product.Price_PerUnit || product.unitPrice || 0;
+        const totalAmount = unitPrice * product.quantity;
+        const totalBags = product.totalBags || 0;
+        return {
+          product: product.product,
+          quantity: product.quantity,
+          totalBag: totalBags,
+          unitPrice: unitPrice,
+          totalAmount: totalAmount, // Add this required field
+          paidAmountOnline: product.paidAmountOnline || 0,
+          paidAmountOffline: product.paidAmountOffline || 0,
+          dueAmount: Number(product.SaleDue),
+          latId: product.lot // map lot -> latId
+        };
+      })
+    };
+
+    
+    // 2. Verify Customer
+    const customer = await Customer.findById(data.customer);
+    if (!customer) {
+      throw new Error(`Customer not found with id: ${data.customer}`);
+    }
+
+    // 3. Process each product
+    for (const item of data.products) {
+      // Update Product stock
+      await Product.findByIdAndUpdate(
+        item.product,
+        { $inc: { currentStock: -item.quantity } }
+      );
+
+      // Update Lat (lot)
+      const lat = await Lat.findById(item.lot);
+
+      if (!lat) {
+        throw new Error(`Lat not found with id: ${item.lot}`);
+      }
+
+      if ((lat.pendingQuantity || 0) < item.quantity) {
+        throw new Error(`Insufficient quantity in Lat ${lat.latNumber}`);
+      }
+    }
+
+    // 4. Create and save sale
+    const sale = new Sale(saleData);
+    await sale.save();
+
+    // 5. Update Lat records after sale is created
+    for (const item of data.products) {
+      await Lat.findByIdAndUpdate(
+        item.lot,
+        {
+          $inc: {
+            pendingQuantity: -item.quantity,
+            pendingBag: -(item.totalBags || 0)
+          },
+          $push: {
+            Customer: {
+              customer: data.customer,
+              quantity: item.quantity,
+              pricePerUnit: item.unitPrice || item.Price_PerUnit || 0,
+              sellingBags: item.totalBags || 0,
+              sellingQuantity: item.quantity,
+              saleId: sale._id
+            }
+          }
+        }
+      );
+    }
+
+    // 6. Payment calculations
+    const totalPaidOnline = sale.products.reduce(
+      (sum, item) => sum + (item.paidAmountOnline || 0), 0
+    );
+    const totalPaidOffline = sale.products.reduce(
+      (sum, item) => sum + (item.paidAmountOffline || 0), 0
+    );
+    const totalPaid = totalPaidOnline + totalPaidOffline;
+
+
+
+    // 7. Update Customer info
+    const updateCustomer = {
+      lastPaymentDate: new Date(),
+      totalDue: data?.totalDue,
+      lastPayment: totalPaid
+
+    };
+
+    if (totalPaidOffline > 0) {
+      updateCustomer.lastShop = totalPaidOffline;
+    }
+
+    await Customer.findByIdAndUpdate(
+      data.customer,
+      updateCustomer
+    );
+
+    return sale;
+  } catch (error) {
+    console.error("Error creating sale:", error);
+    throw error; // Re-throw to handle in the controller
+  }
+};
+
+export const getSalesService = async () => {
+
+  return await Sale.find().populate("customer").populate("createdBy");
+};
+
+export const getSaleByIdService = async (id) => {
+  return await Sale.findById(id).populate("customer").populate("products.product").populate("createdBy");
+};
+export const getSaleByCustomerIdService = async (customerId) => {
+  console.log("customerId in service:", customerId);
+  return await Sale.find({ customer: customerId }).populate("products.product").populate("createdBy");
+};
+
+export const updateSaleService = async (id, data) => {
+  return await Sale.findByIdAndUpdate(id, data, { new: true });
+};
+
+export const deleteSaleService = async (id) => {
+  return await Sale.findByIdAndDelete(id);
+};

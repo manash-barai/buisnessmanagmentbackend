@@ -33,6 +33,7 @@ const saleSchema = new mongoose.Schema({
   discountTotal: { type: Number, default: 0 },
   saleDate: { type: Date, default: Date.now },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  notes: { type: String },
 }, { timestamps: true });
 
 export default mongoose.model("Sale", saleSchema);

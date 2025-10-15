@@ -17,6 +17,7 @@ export const createProduct = async (req, res) => {
 };
 
 export const getProducts = async (req, res) => {
+  console.log("Fetching all products");
   try {
     const products = await getProductsService();
     res.json(products);

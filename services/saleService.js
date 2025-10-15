@@ -25,6 +25,7 @@ export const createSaleService = async (data) => {
           paidAmountOnline: product.paidAmountOnline || 0,
           paidAmountOffline: product.paidAmountOffline || 0,
           dueAmount: Number(product.SaleDue),
+          notes: data.notes || "",
           latId: product.lot // map lot -> latId
         };
       })
@@ -39,10 +40,12 @@ export const createSaleService = async (data) => {
 
     // 3. Process each product
     for (const item of data.products) {
+      console.log("Processing product:", item);
       // Update Product stock
       await Product.findByIdAndUpdate(
         item.product,
-        { $inc: { currentStock: -item.quantity } }
+        { $inc: { currentStock: -item.quantity } },
+        { $inc: { currentStock_bag: -item.totalBags } }
       );
 
       // Update Lat (lot)

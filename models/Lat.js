@@ -18,6 +18,7 @@ const LatSchema = new mongoose.Schema({
   pendingQuantity: {
     type: Number,
   },
+  unit: String,
   pendingBag: {
     type: Number,
   },

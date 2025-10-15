@@ -26,7 +26,7 @@ export const createPurchase = async (req, res) => {
       dueAmount,
       purchaseDate,
       totalBag,
-      createdBy
+      createdBy,
     } = req.body;
    
     // Basic validation
@@ -68,7 +68,7 @@ export const createPurchase = async (req, res) => {
     
 
     // Update the product stock
-    await Product.findByIdAndUpdate(
+   const productsUpdate = await Product.findByIdAndUpdate(
       products,
       productUpdate,
       { new: true }
@@ -103,11 +103,11 @@ export const createPurchase = async (req, res) => {
       supplier: purchase.supplier,
       product: products,
       pendingQuantity: Number(quantity),
+      unit: productsUpdate.unitCategory,
       pendingBag: Number(totalBag),
     };
 
-    console.log("Created LAT qqqdata:", latData);
-
+    
     const lat = await Lat.create(latData);
     console.log("Created LAT:", lat);
     // Log the activity

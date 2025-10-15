@@ -25,7 +25,9 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-
+app.get("/", (req, res) => {
+  res.send("Inventory Management System API");
+});
 // Routes
 app.use("/api/products", productRoutes);
 app.use("/api/customers", customerRoutes);

@@ -128,7 +128,7 @@ export const getSalesService = async () => {
 };
 
 export const getSaleByIdService = async (id) => {
-  return await Sale.findById(id).populate("customer").populate("products.product").populate("createdBy");
+  return await Sale.findById(id).populate("customer").populate("products.product").populate("products.latId").populate("createdBy");
 };
 export const getSaleByCustomerIdService = async (customerId) => {
   console.log("customerId in service:", customerId);

@@ -31,7 +31,7 @@ export const createSaleService = async (data) => {
       })
     };
 
-    
+
     // 2. Verify Customer
     const customer = await Customer.findById(data.customer);
     if (!customer) {
@@ -123,21 +123,90 @@ export const createSaleService = async (data) => {
 };
 
 export const getSalesService = async () => {
-
   return await Sale.find().populate("customer").populate("createdBy");
 };
 
 export const getSaleByIdService = async (id) => {
   return await Sale.findById(id).populate("customer").populate("products.product").populate("products.latId").populate("createdBy");
 };
+
 export const getSaleByCustomerIdService = async (customerId) => {
   console.log("customerId in service:", customerId);
   return await Sale.find({ customer: customerId }).populate("products.product").populate("createdBy");
 };
+export const updateSaleService = async (saleId, data) => {
+  const { customer, products, totalAmount } = data;
 
-export const updateSaleService = async (id, data) => {
-  return await Sale.findByIdAndUpdate(id, data, { new: true });
+  // -----------------------------------------
+  // 1. Update Customer due
+  // -----------------------------------------
+  await Customer.findByIdAndUpdate(
+    customer,
+    { $inc: { totalDue: -totalAmount } }
+  );
+
+  // -----------------------------------------
+  // 2. Update Sale total
+  // -----------------------------------------
+  await Sale.findByIdAndUpdate(
+    saleId,
+    { $inc: { totalAmount: -totalAmount } }
+  );
+
+  // -----------------------------------------
+  // 3. Update product stock, Lat stock, and Sale products array
+  // -----------------------------------------
+  const sale = await Sale.findById(saleId);
+  if (!sale) throw new Error("Sale not found");
+
+  for (const p of products) {
+
+    const returnedQty = p.returnedQty || 0;
+    const returnedBag = p.totalBag || 0;
+
+    // -------- Update Product stock -------
+    await Product.findByIdAndUpdate(
+      p.product,
+      {
+        $inc: {
+          currentStock: returnedQty,
+          currentStock_bag: returnedBag
+        }
+      }
+    );
+
+    // -------- Update Lat -------
+    await Lat.findByIdAndUpdate(
+      p.latId,
+      {
+        $inc: {
+          pendingQuantity: returnedQty,
+          pendingBag: returnedBag
+        }
+      }
+    );
+
+    // -------- Update Sale products array -------
+    const index = sale.products.findIndex(
+      (item) =>
+        item.latId.toString() === p.latId &&
+        item.product.toString() === p.product
+    );
+
+    if (index !== -1) {
+      sale.products[index].quantity = p.originalQty - p.returnedQty;
+      sale.products[index].totalBag = sale.products[index].totalBag - p.totalBag;
+      sale.products[index].totalAmount = sale.products[index].totalAmount - p.totalAmount;
+
+    }
+  }
+
+  await sale.save();
+
+  return "Sale and related records updated successfully";
 };
+
+
 
 export const deleteSaleService = async (id) => {
   return await Sale.findByIdAndDelete(id);

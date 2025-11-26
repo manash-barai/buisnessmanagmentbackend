@@ -5,7 +5,7 @@ const saleSchema = new mongoose.Schema({
   latId: { type: mongoose.Schema.Types.ObjectId, ref: "Lat" },
 
   products: [{
-    latId: { type: mongoose.Schema.Types.ObjectId, ref: "Lat" },
+    latId: { type: mongoose.Schema.Types.ObjectId, ref: "Lat",required:true },
     quantity: {
       type: Number,
       required: true

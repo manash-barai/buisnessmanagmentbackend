@@ -48,6 +48,10 @@ export const getSaleByCustomerId = async (req, res) => {
 
 export const updateSale = async (req, res) => {
   try {
+
+    
+
+
     const sale = await updateSaleService(req.params.id, req.body);
     if (!sale) return res.status(404).json({ error: "Sale not found" });
     res.json(sale);

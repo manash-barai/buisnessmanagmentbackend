@@ -44,9 +44,14 @@ export const createSaleService = async (data) => {
       // Update Product stock
       await Product.findByIdAndUpdate(
         item.product,
-        { $inc: { currentStock: -item.quantity } },
-        { $inc: { currentStock_bag: -item.totalBags } }
+        {
+          $inc: {
+            currentStock: -Number(item.quantity),
+            currentStock_bag: -Number(item.totalBags)
+          }
+        }
       );
+
 
       // Update Lat (lot)
       const lat = await Lat.findById(item.lot);
@@ -136,7 +141,7 @@ export const getSaleByCustomerIdService = async (customerId) => {
 };
 export const updateSaleService = async (saleId, data) => {
   const { customer, products, totalAmount } = data;
-      
+
   // -----------------------------------------
   // 1. Update Customer due
   // -----------------------------------------
@@ -195,7 +200,7 @@ export const updateSaleService = async (saleId, data) => {
 
     if (index !== -1) {
       sale.products[index].quantity = p.originalQty - p.quantity;
-      sale.products[index].totalBag = sale.products[index].totalBag - Number(p.totalBag)||0;
+      sale.products[index].totalBag = sale.products[index].totalBag - Number(p.totalBag) || 0;
       sale.products[index].totalAmount = sale.products[index].totalAmount - p.totalAmount;
 
     }

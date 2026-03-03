@@ -1,43 +1,60 @@
 import Lat from "../models/Lat.js";
 
 export const getLatsService = async (filters) => {
-  const { page = 1, limit = 10, ...filterParams } = filters;
+  // Destructure with default values
+  const { page = 1, limit = 10, id, latNumber, supplier, customer, startDate, endDate } = filters;
+  
+  const pageInt = parseInt(page, 10);
+  const limitInt = parseInt(limit, 10);
+  const skip = (pageInt - 1) * limitInt;
+
   const query = {};
 
-  if (filterParams.latNumber) {
-    query.latNumber = { $regex: filterParams.latNumber, $options: "i" };
+  // 1. Logic: Only show Lats where pendingBag is greater than 0
+  query.pendingQuantity = { $gt: 0 };
+
+  // 2. Logic: Find Lats by Product ID (using the 'id' param you mentioned)
+  if (id) {
+    query.product = id; 
   }
 
-  if (filterParams.supplier) {
-    query.supplier = filterParams.supplier;
+  // 3. Other Filters
+  if (latNumber) {
+    query.latNumber = { $regex: latNumber, $options: "i" };
   }
 
-  if (filterParams.customer) {
-    query['Customer.customer'] = filterParams.customer;
-  }
-  ;
-  if (filterParams.product) {
-    query.product = filterParams.product;
+  if (supplier) {
+    query.supplier = supplier;
   }
 
-  if (filterParams.startDate && filterParams.endDate) {
+  if (customer) {
+    query['Customer.customer'] = customer;
+  }
+
+  if (startDate && endDate) {
     query.createdAt = {
-      $gte: new Date(filterParams.startDate),
-      $lte: new Date(filterParams.endDate),
+      $gte: new Date(startDate),
+      $lte: new Date(endDate),
     };
   }
 
-  if (filterParams.pendingQuantity === 0) {
-    query.pendingQuantity = 0;
-  } else if (filterParams.pendingQuantity_ne) {
-    query.pendingQuantity = { $ne: 0 };
-  }
+  // Execute Query with Pagination
+  const lats = await Lat.find(query)
+    .populate("purchase")
+    .populate("supplier")
+    .populate("product") // Populate product to see details
+    .sort({ updatedAt: -1 })
+    .skip(skip)
+    .limit(limitInt);
 
+  const totalLats = await Lat.countDocuments(query);
 
-  return await Lat.find(query).populate(["purchase", "supplier"])
-    .limit(limit * 1)
-    .skip((page - 1) * limit)
-    .exec();
+  return {
+    lats,
+    totalLats,
+    currentPage: pageInt,
+    totalPages: Math.ceil(totalLats / limitInt),
+  };
 };
 
 export const getLatByIdService = async (id) => {

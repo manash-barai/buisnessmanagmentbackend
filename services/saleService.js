@@ -62,7 +62,7 @@ export const createSaleService = async (data) => {
     // 6. FIFO PAYMENT LOGIC with DISCOUNT (RD)
     const cashReceived = Number(data.payment) || 0;
     const discountGiven = Number(data.discountTotal) || 0;
-    
+
     // The "Total Benefit" to the customer is Cash + Discount
     let amountToDistribute = cashReceived + discountGiven;
 
@@ -80,20 +80,20 @@ export const createSaleService = async (data) => {
       await paymentEntry.save();
 
       // Find all sales with due balance (Oldest First)
-      const pendingSales = await Sale.find({ 
-        customer: data.customer, 
-        dueAmount: { $gt: 0 } 
+      const pendingSales = await Sale.find({
+        customer: data.customer,
+        dueAmount: { $gt: 0 }
       }).sort({ saleDate: 1 });
 
       for (let s of pendingSales) {
         if (amountToDistribute <= 0) break;
 
         const paymentForThisSale = Math.min(s.dueAmount, amountToDistribute);
-        
+
         await Sale.findByIdAndUpdate(s._id, {
-          $inc: { 
+          $inc: {
             dueAmount: -paymentForThisSale,
-            paidAmount: paymentForThisSale 
+            paidAmount: paymentForThisSale
           }
         });
 
@@ -117,8 +117,32 @@ export const createSaleService = async (data) => {
     throw error;
   }
 };
-export const getSalesService = async () => {
-  return await Sale.find().populate("customer").populate("createdBy");
+export const getSalesService = async (page, limit) => {
+  const pageInt = parseInt(page, 10) || 1;
+  const limitInt = parseInt(limit, 10) || 10;
+  const skip = (pageInt - 1) * limitInt;
+
+  // 1. Fetch paginated sales with populations
+  const sales = await Sale.find({})
+    .skip(skip)
+    .limit(limitInt)
+    .sort({ updatedAt: -1 })
+    .populate("customer")
+    .populate("createdBy")
+    .populate({
+      path: "products.product",
+      select: "name unitCategory"
+    });
+  // 2. Get the total count for frontend pagination controls
+  const totalSales = await Sale.countDocuments({});
+
+  // 3. Return the standard response object
+  return {
+    sales,
+    totalSales,
+    currentPage: pageInt,
+    totalPages: Math.ceil(totalSales / limitInt),
+  };
 };
 
 export const getSaleByIdService = async (id) => {
@@ -127,79 +151,208 @@ export const getSaleByIdService = async (id) => {
 
 export const getSaleByCustomerIdService = async (customerId) => {
   console.log("customerId in service:", customerId);
-  return await Sale.find({ customer: customerId }).populate("products.product").populate("createdBy");
+  return await Sale.find({ customer: customerId })
+    .sort({ updatedAt: -1 }).populate("products.product").populate("createdBy");
 };
 export const updateSaleService = async (saleId, data) => {
-  const { customer, products, totalAmount } = data;
+  try {
+    const { customer, products, totalAmount, previousAmount } = data;
 
-  // -----------------------------------------
-  // 1. Update Customer due
-  // -----------------------------------------
-  await Customer.findByIdAndUpdate(
-    customer,
-    { $inc: { totalDue: -totalAmount } }
-  );
+    const returnAmount = previousAmount - totalAmount;
 
-  // -----------------------------------------
-  // 2. Update Sale total
-  // -----------------------------------------
-  await Sale.findByIdAndUpdate(
-    saleId,
-    { $inc: { totalAmount: -totalAmount } }
-  );
+    // -----------------------------------------
+    // 1️⃣ Get Sale
+    // -----------------------------------------
+    const sale = await Sale.findById(saleId);
+    if (!sale) throw new Error("Sale not found");
 
-  // -----------------------------------------
-  // 3. Update product stock, Lat stock, and Sale products array
-  // -----------------------------------------
-  const sale = await Sale.findById(saleId);
-  if (!sale) throw new Error("Sale not found");
+    // Store original values for calculation
+    const originalPaidAmount = sale.paidAmount;
+    let remainingCredit = 0; // Track unused credit
 
-  for (const p of products) {
+    // -----------------------------------------
+    // 2️⃣ Process Return If Exists
+    // -----------------------------------------
+    if (returnAmount > 0) {
+      
+      // Update sale total first
+      sale.totalAmount = totalAmount;
+      
+      // Adjust paid amount if customer overpaid for this sale
+      if (sale.paidAmount > totalAmount) {
+        // Customer paid more than the new total
+        sale.paidAmount = totalAmount;
+      }
 
-    const returnedQty = p.quantity || 0;
-    const returnedBag = Number(p.totalBag) || 0;
+      // Recalculate due safely
+      sale.dueAmount = sale.totalAmount - sale.paidAmount;
 
-    // -------- Update Product stock -------
-    await Product.findByIdAndUpdate(
-      p.product,
-      {
-        $inc: {
-          currentStock: returnedQty,
-          currentStock_bag: returnedBag
+      let extraCredit = 0;
+
+      // Calculate extra credit correctly
+      if (originalPaidAmount > sale.paidAmount) {
+        // Customer had paid more than they should have for this sale now
+        extraCredit = originalPaidAmount - sale.paidAmount;
+      }
+
+      // If fully returned → mark sale as returned
+      if (sale.totalAmount === 0) {
+        sale.returnd = true;
+      }
+
+      await sale.save();
+
+      // -----------------------------------------
+      // 3️⃣ Create Return Payment Entry
+      // -----------------------------------------
+      await paymentSchema.create({
+        customer,
+        amount: returnAmount,
+        rd: 0,
+        method: "CASH",
+        notes: `Return from sale ${saleId}`,
+        saleId: saleId,
+        returned: true,
+        paymentType: "RETURN",
+        remainingAmount: 0
+      });
+
+      // -----------------------------------------
+      // 4️⃣ If extra credit exists, adjust other unpaid sales
+      // -----------------------------------------
+      if (extraCredit > 0) {
+        remainingCredit = extraCredit;
+
+        // Find all unpaid sales for this customer (excluding current sale)
+        const unpaidSales = await Sale.find({
+          customer,
+          dueAmount: { $gt: 0 },
+          _id: { $ne: saleId }
+        }).sort({ saleDate: 1 }); // Oldest first (FIFO approach)
+
+        for (const s of unpaidSales) {
+          if (remainingCredit <= 0) break;
+
+          const amountToApply = Math.min(remainingCredit, s.dueAmount);
+          
+          // Update the sale
+          s.paidAmount += amountToApply;
+          s.dueAmount -= amountToApply;
+          remainingCredit -= amountToApply;
+
+          await s.save();
+
+          // Record this credit adjustment as a payment
+          await paymentSchema.create({
+            customer,
+            amount: amountToApply,
+            rd: 0,
+            method: "CREDIT",
+            notes: `Credit applied from return of sale ${saleId}`,
+            saleId: s._id,
+            returned: false,
+            paymentType: "CREDIT_ADJUSTMENT",
+            remainingAmount: s.dueAmount
+          });
+        }
+
+        // Log remaining credit if any
+        if (remainingCredit > 0) {
+          console.log(`Customer has ₹${remainingCredit} credit remaining - will show as negative totalDue`);
         }
       }
-    );
-
-    // -------- Update Lat -------
-    await Lat.findByIdAndUpdate(
-      p.latId,
-      {
-        $inc: {
-          pendingQuantity: returnedQty,
-          pendingBag: returnedBag
-        }
-      }
-    );
-
-    // -------- Update Sale products array -------
-    const index = sale.products.findIndex(
-      (item) =>
-        item.latId.toString() === p.latId &&
-        item.product.toString() === p.product
-    );
-
-    if (index !== -1) {
-      sale.products[index].quantity = p.originalQty - p.quantity;
-      sale.products[index].totalBag = sale.products[index].totalBag - Number(p.totalBag) || 0;
-      sale.products[index].totalAmount = sale.products[index].totalAmount - p.totalAmount;
-
     }
+
+    // -----------------------------------------
+    // 5️⃣ Update Product & Lat Stock (Add back returned items)
+    // -----------------------------------------
+    for (const p of products) {
+      const returnedQty = p.returnedQty || 0;
+      const returnedBag = Number(p.totalBag) || 0;
+
+      // Only update stock if items were actually returned
+      if (returnedQty > 0) {
+        await Product.findByIdAndUpdate(
+          p.product,
+          {
+            $inc: {
+              currentStock: returnedQty,
+              currentStock_bag: returnedBag
+            }
+          }
+        );
+
+        await Lat.findByIdAndUpdate(
+          p.latId,
+          {
+            $inc: {
+              pendingQuantity: returnedQty,
+              pendingBag: returnedBag
+            }
+          }
+        );
+      }
+
+      // Update the product in sale's products array
+      const index = sale.products.findIndex(
+        (item) =>
+          item.latId.toString() === p.latId &&
+          item.product.toString() === p.product
+      );
+
+      if (index !== -1) {
+        sale.products[index].quantity = p.quantity;
+        sale.products[index].totalBag = p.totalBag || 0;
+        sale.products[index].totalAmount = p.totalAmount;
+        sale.products[index].returnedQuantity =
+          (sale.products[index].returnedQuantity || 0) + returnedQty;
+      }
+    }
+
+    await sale.save();
+
+    // -----------------------------------------
+    // 6️⃣ Recalculate Customer Total Due (including unused credit)
+    // -----------------------------------------
+    const allSales = await Sale.find({ customer });
+
+    // Sum all due amounts from all sales
+    let finalTotalDue = allSales.reduce(
+      (sum, s) => sum + (s.dueAmount || 0),
+      0
+    );
+
+    // IMPORTANT: Subtract any unused credit to make totalDue negative if needed
+    if (remainingCredit > 0) {
+      finalTotalDue = finalTotalDue - remainingCredit;
+    }
+
+    // Update customer with final totalDue (can be negative)
+    await Customer.findByIdAndUpdate(customer, {
+      totalDue: finalTotalDue
+    });
+
+    // -----------------------------------------
+    // 7️⃣ Return success response
+    // -----------------------------------------
+    return {
+      success: true,
+      message: "Sale updated and return processed successfully",
+      returnAmount: returnAmount > 0 ? returnAmount : 0,
+      extraCredit: remainingCredit,
+      customerTotalDue: finalTotalDue, // Will be negative if you owe customer
+      customerStatus: finalTotalDue >= 0 ? 
+        `Customer owes ₹${finalTotalDue}` : 
+        `You owe customer ₹${Math.abs(finalTotalDue)}`,
+      updatedSale: sale
+    };
+
+  } catch (error) {
+    console.error("Error updating sale with return:", error);
+    throw error;
   }
-
-  await sale.save();
-
-  return "Sale and related records updated successfully";
 };
+
 
 
 

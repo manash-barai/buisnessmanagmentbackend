@@ -5,19 +5,24 @@ import {
   updateSupplierService,
   deleteSupplierService,
 } from "../services/supplierService.js";
-
 export const createSupplier = async (req, res) => {
   try {
     const supplier = await createSupplierService(req.body);
     res.status(201).json(supplier);
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({
+      message: err.message
+    });
   }
 };
 
+
+
 export const getSuppliers = async (req, res) => {
   try {
-    const suppliers = await getSuppliersService();
+    const { page = 1, limit = 10 } = req.query;
+    const suppliers = await getSuppliersService(page, limit);
     res.json(suppliers);
   } catch (err) {
     res.status(500).json({ error: err.message });

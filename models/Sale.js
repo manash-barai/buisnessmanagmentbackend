@@ -27,6 +27,7 @@ const saleSchema = new mongoose.Schema({
     },
     
   }],
+  returnd:{type:Boolean,default:false},
   totalAmount: { type: Number, required: true },
   paidAmount: { type: Number, default: 0 },
   dueAmount: { type: Number, default: 0 },

@@ -17,9 +17,10 @@ export const createProduct = async (req, res) => {
 };
 
 export const getProducts = async (req, res) => {
-  console.log("Fetching all products");
+  
   try {
-    const products = await getProductsService();
+    const { page = 1, limit = 10 } = req.query;
+    const products = await getProductsService(page, limit);
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: err.message });

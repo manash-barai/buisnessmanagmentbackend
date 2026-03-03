@@ -17,7 +17,8 @@ export const createReturn = async (req, res) => {
 
 export const getReturns = async (req, res) => {
   try {
-    const returns = await getReturnsService();
+    const { page = 1, limit = 10 } = req.query;
+    const returns = await getReturnsService(page, limit);
     res.json(returns);
   } catch (err) {
     res.status(500).json({ error: err.message });

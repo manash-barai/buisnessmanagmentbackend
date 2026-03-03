@@ -5,8 +5,13 @@ export const createUserService = async (data) => {
   return await user.save();
 };
 
-export const getUsersService = async () => {
-  return await User.find();
+export const getUsersService = async (page, limit) => {
+  const options = {
+    skip: (parseInt(page, 10) - 1) * parseInt(limit, 10),
+    limit: parseInt(limit, 10),
+    sort: { updatedAt: -1 },
+  };
+  return await User.find({}, null, options);
 };
 
 export const getUserByIdService = async (id) => {

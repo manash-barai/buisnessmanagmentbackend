@@ -19,7 +19,8 @@ export const createSale = async (req, res) => {
 
 export const getSales = async (req, res) => {
   try {
-    const sales = await getSalesService();
+    const { page = 1, limit = 10 } = req.query;
+    const sales = await getSalesService(page, limit);
     res.json(sales);
   } catch (err) {
     res.status(500).json({ error: err.message });

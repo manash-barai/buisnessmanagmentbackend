@@ -2,8 +2,8 @@ import { getLatsService, getLatByIdService } from "../services/latService.js";
 
 export const getLats = async (req, res) => {
   try {
-    const filters = req.body;
-    const lats = await getLatsService(filters);
+    const { page = 1, limit = 10, ...filters } = req.query;
+    const lats = await getLatsService({ page, limit, ...filters });
     res.json(lats);
   } catch (err) {
     res.status(500).json({ error: err.message });

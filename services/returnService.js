@@ -5,8 +5,13 @@ export const createReturnService = async (data) => {
   return await newReturn.save();
 };
 
-export const getReturnsService = async () => {
-  return await Return.find().populate("customer").populate("supplier").populate("products.product").populate("createdBy");
+export const getReturnsService = async (page, limit) => {
+  const options = {
+    skip: (parseInt(page, 10) - 1) * parseInt(limit, 10),
+    limit: parseInt(limit, 10),
+    sort: { updatedAt: -1 },
+  };
+  return await Return.find({}, null, options).populate("customer").populate("supplier").populate("products.product").populate("createdBy");
 };
 
 export const getReturnByIdService = async (id) => {

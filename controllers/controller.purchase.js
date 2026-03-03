@@ -109,7 +109,7 @@ export const createPurchase = async (req, res) => {
 
     
     const lat = await Lat.create(latData);
-    console.log("Created LAT:", lat);
+   
     // Log the activity
     await createActivityLogService({
       action: "Create_Purchase",
@@ -140,8 +140,14 @@ export const createPurchase = async (req, res) => {
 
 export const getPurchases = async (req, res) => {
   try {
-    const purchases = await getPurchasesService();
-    res.json(purchases);
+    const { page = 1, limit = 10 } = req.query;
+    const { purchases, totalPurchases, currentPage, totalPages } = await getPurchasesService(page, limit);
+    res.json({
+      purchases,
+      totalPurchases,
+      currentPage,
+      totalPages,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

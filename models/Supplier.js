@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
 
 const supplierSchema = new mongoose.Schema({
-  name: String,
+  name: {
+    type:String,
+    unique:true
+  },
   phone: String,
   address: String,
   totalPayment: Number,

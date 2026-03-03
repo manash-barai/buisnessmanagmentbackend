@@ -5,8 +5,26 @@ export const createPurchaseService = async (data) => {
   return await purchase.save();
 };
 
-export const getPurchasesService = async () => {
-  return await Purchase.find().populate("supplier").populate("products").populate("createdBy");
+export const getPurchasesService = async (page, limit) => {
+  const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+  const limitInt = parseInt(limit, 10);
+
+  const purchases = await Purchase.find({})
+    .skip(skip)
+    .limit(limitInt)
+    .sort({ updatedAt: -1 })
+    .populate("supplier")
+    .populate("products")
+    .populate("createdBy");
+
+  const totalPurchases = await Purchase.countDocuments();
+
+  return {
+    purchases,
+    totalPurchases,
+    currentPage: parseInt(page, 10),
+    totalPages: Math.ceil(totalPurchases / limitInt),
+  };
 };
 
 export const getPurchaseByIdService = async (id) => {

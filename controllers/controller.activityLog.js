@@ -15,7 +15,8 @@ export const createActivityLog = async (req, res) => {
 
 export const getActivityLogs = async (req, res) => {
   try {
-    const activityLogs = await getActivityLogsService();
+    const { page = 1, limit = 10 } = req.query;
+    const activityLogs = await getActivityLogsService(page, limit);
     res.json(activityLogs);
   } catch (err) {
     res.status(500).json({ error: err.message });

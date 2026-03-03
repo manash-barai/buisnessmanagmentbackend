@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
 
 const customerSchema = new mongoose.Schema({
-  name: String,
+  name: {
+    type:String,
+    unique:true
+  },
   phone: String,
   whatsApp: String,
   address: String,

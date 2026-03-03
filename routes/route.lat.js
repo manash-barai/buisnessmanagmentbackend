@@ -6,7 +6,7 @@ import {
 
 const router = express.Router();
 
-router.post("/", getLats);
+router.get("/", getLats);
 router.get("/:id", getLatById);
 
 export default router;

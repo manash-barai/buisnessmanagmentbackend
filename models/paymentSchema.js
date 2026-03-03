@@ -15,10 +15,11 @@ const paymentSchema = new mongoose.Schema(
     paymentDate: { type: Date, default: Date.now },
     method: { type: String, enum: ["CASH", "UPI", "BANK"], default: "CASH" },
     notes: String,
+    returned:{ type: Boolean, default: false },
     saleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Sale",
-      required: true
+     
     },
   },
   { timestamps: true }

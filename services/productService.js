@@ -5,8 +5,28 @@ export const createProductService = async (data) => {
   return await product.save();
 };
 
-export const getProductsService = async () => {
-  return await Product.find()
+export const getProductsService = async (page, limit) => {
+  const pageInt = parseInt(page, 10) || 1;
+  const limitInt = parseInt(limit, 10) || 10;
+  const skip = (pageInt - 1) * limitInt;
+
+  // 1. Fetch the paginated data
+  const products = await Product.find({})
+    .skip(skip)
+    .limit(limitInt)
+    .sort({ updatedAt: -1 });
+    // Add .populate() here if Product has references
+
+  // 2. Get the total count for pagination math
+  const totalProducts = await Product.countDocuments();
+
+  // 3. Return the structured object
+  return {
+    products,
+    totalProducts,
+    currentPage: pageInt,
+    totalPages: Math.ceil(totalProducts / limitInt),
+  };
 };
 
 export const getProductByIdService = async (id) => {

@@ -41,19 +41,35 @@ export const CustomareSaleDetailse = async (req, res) => {
     if (!customerDoc) return res.status(404).json({ message: "Not found" });
 
     // 2. Fetch all Sales and Payments
-    const sales = await Sale.find({ customer: customerId }).select("totalAmount saleDate createdAt").lean();
-    const payments = await paymentSchema.find({ customer: customerId }).select("totalAmount paymentDate createdAt").lean();
+    const sales = await Sale.find({ customer: customerId }).select("totalAmount notes saleDate createdAt").lean();
+    const payments = await paymentSchema.find({ customer: customerId }).select("totalAmount paymentDate notes createdAt").lean();
 
     // 3. Merge and Sort (Oldest First)
+    // let ledger = [
+    //   ...sales.map(s => ({ type: "CREDIT", amount: s.totalAmount, date: s.saleDate || s.createdAt, refId: s._id })),
+    //   ...payments.map(p => ({ type: "DEBIT", amount: p.totalAmount, date: p.paymentDate || p.createdAt, refId: p._id }))
+    // ];
     let ledger = [
-      ...sales.map(s => ({ type: "CREDIT", amount: s.totalAmount, date: s.saleDate || s.createdAt, refId: s._id })),
-      ...payments.map(p => ({ type: "DEBIT", amount: p.totalAmount, date: p.paymentDate || p.createdAt, refId: p._id }))
+      ...sales.map(s => ({
+        type: "CREDIT",
+        amount: s.totalAmount,
+        date: s.saleDate || s.createdAt,
+        refId: s._id,
+        notes: s.notes || null
+      })),
+      ...payments.map(p => ({
+        type: "DEBIT",
+        amount: p.totalAmount,
+        date: p.paymentDate || p.createdAt,
+        refId: p._id,
+        notes: p.notes || null
+      }))
     ];
     ledger.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // 🔥 THE FIX IS HERE 🔥
     // Start runningDue with the customer's old opening balance, NOT zero.
-    let runningDue = customerDoc.openingBalance || 0; 
+    let runningDue = customerDoc.openingBalance || 0;
 
     const ledgerWithBalance = ledger.map((entry) => {
       if (entry.type === "CREDIT") {
@@ -151,7 +167,7 @@ export const createPayment = async (req, res) => {
 
       // Find out how much we can apply to this specific sale
       const amountToApply = Math.min(remainingToDistribute, sale.dueAmount);
-      
+
       sale.paidAmount += amountToApply;
       sale.dueAmount -= amountToApply;
       remainingToDistribute -= amountToApply;

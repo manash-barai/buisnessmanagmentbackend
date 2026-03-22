@@ -117,7 +117,7 @@ export const createPayment = async (req, res) => {
     if (!customer) {
       return res.status(400).json({ message: "Customer ID is required" });
     }
-    if (!amount || amount <= 0) {
+    if ( amount+rd <= 0) {
       return res.status(400).json({ message: "Amount must be greater than 0" });
     }
 

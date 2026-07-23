@@ -10,6 +10,7 @@ export const getLatsService = async (filters) => {
 
   const query = {};
 
+  
   // 1. Logic: Only show Lats where pendingBag is greater than 0
   query.pendingQuantity = { $gt: 0 };
 

@@ -13,7 +13,12 @@ import returnRoutes from "./routes/route.return.js";
 import userRoutes from "./routes/route.user.js";
 import activityLogRoutes from "./routes/route.activityLog.js";
 import latRoutes from "./routes/route.lat.js";
-
+import dns from "dns"
+dns.setServers([
+  '1.1.1.1',
+  '8.8.8.8'
+])
+// for mongodb connection error dns
 // ✅ Load environment variables first
 dotenv.config();
 
